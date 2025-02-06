@@ -14,6 +14,7 @@ contract Pricing {
         uint totalSpent;            // Загальна сума витрат
         string cohort;              // Когорта користувача
         string tariffPlan;          // Тарифний план користувача
+        uint productVariety;        // Різноманітність покупок
         Purchase[] purchaseHistory; // Історія покупок
     }
 
@@ -53,6 +54,9 @@ contract Pricing {
         user.purchaseFrequency += 1;
         user.totalSpent += _purchaseAmount;
 
+        // Оновлення різноманітності покупок
+        updateProductVariety(user, _productType);
+
         // Додавання запису в історію покупок
         user.purchaseHistory.push(Purchase(block.timestamp, _purchaseAmount, _productType));
 
@@ -88,12 +92,14 @@ contract Pricing {
         uint recencyScore = block.timestamp - userData.lastPurchaseTimestamp;
         uint frequencyScore = userData.purchaseFrequency;
         uint monetaryScore = userData.totalSpent;
+        uint diversityScore = userData.productVariety;
 
         uint recencyFactor = calculateRecencyFactor(recencyScore);
         uint frequencyFactor = calculateFrequencyFactor(frequencyScore);
         uint monetaryFactor = calculateMonetaryFactor(monetaryScore);
+        uint diversityFactor = calculateDiversityFactor(diversityScore);
 
-        return basePrice * recencyFactor * frequencyFactor * monetaryFactor / 10;
+        return basePrice * recencyFactor * frequencyFactor * monetaryFactor * diversityFactor / 1000;
     }
 
     function calculateRecencyFactor(uint recencyScore) internal pure returns (uint) {
@@ -108,12 +114,16 @@ contract Pricing {
         return monetaryScore > 5000 ether ? 1 : monetaryScore > 1000 ether ? 2 : 3;
     }
 
-    // Функція для визначення тарифного плану користувача на основі RFM аналізу
+    function calculateDiversityFactor(uint diversityScore) internal pure returns (uint) {
+        return diversityScore > 5 ? 3 : diversityScore > 2 ? 2 : 1;
+    }
+
+    // Функція для визначення тарифного плану користувача на основі RFM-D аналізу
     function assignTariffPlan(address user) public view returns (string memory) {
         User memory userData = users[user];
 
-        // Призначення тарифного плану на основі RFM
-        if (userData.totalSpent > 5000 ether && userData.purchaseFrequency > 10) {
+        // Призначення тарифного плану на основі RFM-D
+        if (userData.totalSpent > 5000 ether && userData.purchaseFrequency > 10 && userData.productVariety > 5) {
             return "Premium";  // Преміум тариф
         } else if (userData.totalSpent > 1000 ether) {
             return "Standard"; // Стандартний тариф
@@ -128,13 +138,28 @@ contract Pricing {
     function assignCohort(address user) public view returns (string memory) {
         User memory userData = users[user];
 
-        // Призначення когорти на основі витрат і частоти покупок
-        if (userData.totalSpent > 5000 ether && userData.purchaseFrequency > 10) {
-            return "HighSpender";  // Високий витрачений
+        // Призначення когорти на основі витрат, частоти покупок і різноманітності покупок
+        if (userData.totalSpent > 5000 ether && userData.purchaseFrequency > 10 && userData.productVariety > 5) {
+            return "HighSpender";  // Високий витрачений і різноманітний покупець
         } else if (userData.totalSpent > 1000 ether) {
             return "FrequentBuyer"; // Частий покупець
         } else {
             return "LowSpender"; // Низький витрачений
+        }
+    }
+
+    // Оновлення різноманітності покупок
+    function updateProductVariety(User storage user, string memory _productType) internal {
+        bool isNewProduct = true;
+        for (uint i = 0; i < user.purchaseHistory.length; i++) {
+            if (keccak256(bytes(user.purchaseHistory[i].product)) == keccak256(bytes(_productType))) {
+                isNewProduct = false;
+                break;
+            }
+        }
+
+        if (isNewProduct) {
+            user.productVariety += 1;
         }
     }
 
@@ -173,13 +198,13 @@ contract Pricing {
         uint discount;
 
         if (keccak256(bytes(cohort)) == keccak256(bytes("HighSpender"))) {
-            discount = basePrice / 10; // 10% знижки для HighSpender
+            discount = basePrice * 20 / 100; // 20% знижки для HighSpender
         } else if (keccak256(bytes(cohort)) == keccak256(bytes("FrequentBuyer"))) {
-            discount = basePrice / 5; // 20% знижки для FrequentBuyer
+            discount = basePrice *15 / 100; // 15% знижки для FrequentBuyer
         } else if (keccak256(bytes(cohort)) == keccak256(bytes("LowSpender"))) {
-            discount = basePrice / 3; // 33% знижки для LowSpender
+            discount = basePrice * 10 / 100; // 10% знижки для LowSpender
         } else {
-            discount = basePrice / 20; // 5% стандартна знижка
+            discount = basePrice * 5 / 100; // 5% стандартна знижка
         }
 
         return discount;
@@ -199,4 +224,7 @@ contract Pricing {
         return users[user].purchaseHistory;
     }
 }
+
+
+
 
